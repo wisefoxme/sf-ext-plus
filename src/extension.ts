@@ -10,53 +10,53 @@ import { activate as activateUserManagementCommands } from './commands/userenabl
 import { activate as sObjectPreviewCommands } from './commands/objects/main';
 
 export function activate(context: vscode.ExtensionContext) {
-    // #region labels
+    activateLabelFeatures(context);
+    activatePermissionSetFeatures(context);
+    activateWatcherFeatures();
+    activatePackageFeatures(context);
+    activateFieldFeatures(context);
+    activateSoqlPreviewFeatures(context);
+    activateUserManagementFeatures(context);
+    activateSObjectPreviewFeatures(context);
+}
 
+// Label-related features
+function activateLabelFeatures(context: vscode.ExtensionContext) {
     activateLabelsAutoComplete(context);
     activateLabelCreateOnPalette(context);
+}
 
-    // #endregion
-
-    // #region permission sets
-
+// Permission set-related features
+function activatePermissionSetFeatures(context: vscode.ExtensionContext) {
     activatePermissionSetCommands(context);
+}
 
-    // #endregion
-
-    // #region watchers
-
+// Watcher-related features
+function activateWatcherFeatures() {
     activeProjectFileWatcher();
+}
 
-    // #endregion
-
-    // #region package commands
-
+// Packaging-related features
+function activatePackageFeatures(context: vscode.ExtensionContext) {
     activatePackageCommands(context);
+}
 
-    // #endregion
-
-    // #region fields commands
-
+// Field-related features
+function activateFieldFeatures(context: vscode.ExtensionContext) {
     activateFieldsCommands(context);
+}
 
-    // #endregion
-
-    // #region fields commands
-
+// SOQL preview-related features
+function activateSoqlPreviewFeatures(context: vscode.ExtensionContext) {
     activateSoqlPreviewCommands(context);
+}
 
-    // #endregion
-
-    // #region fields commands
-
+// User management-related features
+function activateUserManagementFeatures(context: vscode.ExtensionContext) {
     activateUserManagementCommands(context);
+}
 
-    // #endregion
-
-
-    // #region fields commands
-
+// SObject preview-related features
+function activateSObjectPreviewFeatures(context: vscode.ExtensionContext) {
     sObjectPreviewCommands(context);
-
-    // #endregion
 }

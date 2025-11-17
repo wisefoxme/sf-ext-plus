@@ -35,8 +35,8 @@
         "enablement": "editorHasSelection"
       },
       {
-        "command": "sf-ext-plus.assignPermissionSets",
-        "title": "Salesforce Ext.+: Assign Permission Sets"
+        "command": "sf-ext-plus.managePermissionSets",
+        "title": "Salesforce Ext.+: Manage Permission Sets"
       },
       {
         "command": "sf-ext-plus.packaging",
