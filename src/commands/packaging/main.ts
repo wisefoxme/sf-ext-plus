@@ -31,9 +31,11 @@ async function loadPackageCommand(_context: vscode.ExtensionContext) {
 
     // show options for package commands
     const packageCommandOptions = [
-        // { label: 'Create Package', value: 'create' },
-        // { label: 'Delete Package', value: 'delete' },
-        // { label: 'Update Package', value: 'update' }
+        { label: 'Create Package', value: 'create' },
+        { label: 'Create Package Version', value: 'create-version' },
+        { label: 'Promote Package Version', value: 'promote' },
+        { label: 'Delete Package', value: 'delete' },
+        { label: 'Delete Package Version', value: 'delete-version' },
         { label: 'Install Package', value: 'install' },
         { label: 'List Packages', value: 'list' },
         { label: 'Uninstall Package', value: 'uninstall' },
@@ -49,6 +51,21 @@ async function loadPackageCommand(_context: vscode.ExtensionContext) {
     }
 
     switch (selectedPackageCommand.value) {
+        case 'create':
+            createPackage();
+            break;
+        case 'create-version':
+            createPackageVersion();
+            break;
+        case 'promote':
+            promotePackageVersion();
+            break;
+        case 'delete':
+            deletePackage();
+            break;
+        case 'delete-version':
+            deletePackageVersion();
+            break;
         case 'install':
             installPackage();
             break;
@@ -320,5 +337,399 @@ async function uninstallPackage() {
 
     showUninstallingPackageProgressNotification.then(() => {
         intervalId && clearInterval(intervalId);
+    });
+}
+
+async function getDevHubUsername(): Promise<string | undefined> {
+    const devHubUsername = await vscode.window.showInputBox({
+        prompt: 'Enter the Dev Hub username or alias',
+        placeHolder: 'e.g. myDevHub@example.com or myDevHubAlias',
+        ignoreFocusOut: true
+    });
+
+    return devHubUsername;
+}
+
+async function createPackage() {
+    // Prompt for package name
+    const packageName = await vscode.window.showInputBox({
+        prompt: 'Enter the package name',
+        placeHolder: 'e.g. MyPackage',
+        ignoreFocusOut: true
+    });
+
+    if (!packageName) {
+        return;
+    }
+
+    // Prompt for package description (optional)
+    const packageDescription = await vscode.window.showInputBox({
+        prompt: 'Enter the package description (optional)',
+        placeHolder: 'e.g. My package description',
+        ignoreFocusOut: true
+    });
+
+    // Prompt for package type
+    const packageTypeOption = await vscode.window.showQuickPick([
+        { label: 'Unlocked', value: 'Unlocked' },
+        { label: 'Managed', value: 'Managed' }
+    ], {
+        placeHolder: 'Select the package type',
+        ignoreFocusOut: true
+    });
+
+    if (!packageTypeOption) {
+        return;
+    }
+
+    // Prompt for source path
+    const sourcePath = await vscode.window.showInputBox({
+        prompt: 'Enter the source path',
+        placeHolder: 'e.g. force-app',
+        value: 'force-app',
+        ignoreFocusOut: true
+    });
+
+    if (!sourcePath) {
+        return;
+    }
+
+    // Prompt for dev hub
+    const devHubUsername = await getDevHubUsername();
+    if (!devHubUsername) {
+        return;
+    }
+
+    // Build command
+    let createCommand = `sf package create --name "${packageName}" --package-type ${packageTypeOption.value} --path "${sourcePath}" --target-dev-hub "${devHubUsername}" --json`;
+
+    if (packageDescription) {
+        createCommand = `sf package create --name "${packageName}" --description "${packageDescription}" --package-type ${packageTypeOption.value} --path "${sourcePath}" --target-dev-hub "${devHubUsername}" --json`;
+    }
+
+    const showCreatingPackageProgressNotification = vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Creating package ${packageName}...`,
+        cancellable: false
+    }, async (progress: vscode.Progress<{ message?: string; increment?: number }>) => {
+        progress.report({ increment: 0 });
+
+        try {
+            const createResult = await executeShellCommand(createCommand);
+            const createResultJson = JSON.parse(createResult);
+
+            if (createResultJson.status === 0) {
+                const packageId = createResultJson.result?.Id || 'N/A';
+                vscode.window.showInformationMessage(`Package ${packageName} created successfully. Package ID: ${packageId}`);
+
+                // Copy package ID to clipboard
+                if (packageId !== 'N/A') {
+                    await vscode.env.clipboard.writeText(packageId);
+                }
+            } else {
+                vscode.window.showErrorMessage(`Failed to create package: ${createResultJson.message || 'Unknown error'}`);
+            }
+
+            progress.report({ increment: 100, message: 'Done' });
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create package: ${errorMessage}`);
+            progress.report({ increment: 100, message: 'Done' });
+        }
+    });
+}
+
+async function createPackageVersion() {
+    // Prompt for package ID or alias
+    const packageId = await vscode.window.showInputBox({
+        prompt: 'Enter the package ID or alias',
+        placeHolder: 'e.g. 0Ho... or packageAlias',
+        ignoreFocusOut: true
+    });
+
+    if (!packageId) {
+        return;
+    }
+
+    // Prompt for source path
+    const sourcePath = await vscode.window.showInputBox({
+        prompt: 'Enter the source path',
+        placeHolder: 'e.g. force-app',
+        value: 'force-app',
+        ignoreFocusOut: true
+    });
+
+    if (!sourcePath) {
+        return;
+    }
+
+    // Prompt for installation key bypass
+    const installationKeyBypassOption = await vscode.window.showQuickPick([
+        { label: 'Yes', value: 'yes' },
+        { label: 'No', value: 'no' }
+    ], {
+        placeHolder: 'Bypass installation key?',
+        ignoreFocusOut: true
+    });
+
+    if (!installationKeyBypassOption) {
+        return;
+    }
+
+    // Prompt for wait time
+    const waitTimeInput = await vscode.window.showInputBox({
+        prompt: 'Enter wait time in minutes',
+        placeHolder: 'e.g. 10',
+        value: '10',
+        ignoreFocusOut: true
+    });
+
+    if (!waitTimeInput) {
+        return;
+    }
+
+    const waitTime = parseInt(waitTimeInput, 10);
+    if (isNaN(waitTime) || waitTime < 1) {
+        vscode.window.showErrorMessage('Invalid wait time. Please enter a number greater than 0.');
+        return;
+    }
+
+    // Prompt for dev hub
+    const devHubUsername = await getDevHubUsername();
+    if (!devHubUsername) {
+        return;
+    }
+
+    // Build command
+    let createVersionCommand = `sf package version create --package "${packageId}" --path "${sourcePath}" --wait ${waitTime} --target-dev-hub "${devHubUsername}" --json`;
+
+    if (installationKeyBypassOption.value === 'yes') {
+        createVersionCommand = `sf package version create --package "${packageId}" --path "${sourcePath}" --installation-key-bypass --wait ${waitTime} --target-dev-hub "${devHubUsername}" --json`;
+    }
+
+    const showCreatingPackageVersionProgressNotification = vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Creating package version for ${packageId}...`,
+        cancellable: false
+    }, async (progress: vscode.Progress<{ message?: string; increment?: number }>) => {
+        progress.report({ increment: 0 });
+        let intervalId: NodeJS.Timeout | undefined;
+
+        try {
+            const startTime = Date.now();
+            let previousIncrement = 0;
+
+            // Calculate total wait time in milliseconds
+            const totalWaitTimeMs = waitTime * 60 * 1000;
+
+            intervalId = setInterval(() => {
+                const elapsedTime = Date.now() - startTime;
+                const currentProgress = Math.min(Math.floor((elapsedTime / totalWaitTimeMs) * 95), 95);
+
+                const incrementDelta = currentProgress - previousIncrement;
+
+                if (incrementDelta > 0) {
+                    previousIncrement = currentProgress;
+                    progress.report({ increment: incrementDelta });
+                }
+            }, 1000);
+
+            const createVersionResult = await executeShellCommand(createVersionCommand);
+            const createVersionResultJson = JSON.parse(createVersionResult);
+
+            if (createVersionResultJson.status === 0) {
+                const packageVersionId = createVersionResultJson.result?.SubscriberPackageVersionId || 'N/A';
+                vscode.window.showInformationMessage(`Package version created successfully. Package Version ID: ${packageVersionId}`);
+
+                // Copy package version ID to clipboard
+                if (packageVersionId !== 'N/A') {
+                    await vscode.env.clipboard.writeText(packageVersionId);
+                }
+            } else {
+                vscode.window.showErrorMessage(`Failed to create package version: ${createVersionResultJson.message || 'Unknown error'}`);
+            }
+
+            setTimeout(() => {
+                progress.report({ increment: 100 });
+            }, 250);
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create package version: ${errorMessage}`);
+            progress.report({ increment: 100, message: 'Done' });
+        } finally {
+            intervalId && clearInterval(intervalId);
+        }
+    });
+}
+
+async function promotePackageVersion() {
+    // Prompt for package version ID
+    const packageVersionId = await vscode.window.showInputBox({
+        prompt: 'Enter the package version ID to promote',
+        placeHolder: 'e.g. 04t...',
+        ignoreFocusOut: true
+    });
+
+    if (!packageVersionId) {
+        return;
+    }
+
+    // Prompt for dev hub
+    const devHubUsername = await getDevHubUsername();
+    if (!devHubUsername) {
+        return;
+    }
+
+    // Build command
+    const promoteCommand = `sf package version promote --package "${packageVersionId}" --target-dev-hub "${devHubUsername}" --json`;
+
+    const showPromotingPackageVersionProgressNotification = vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Promoting package version ${packageVersionId}...`,
+        cancellable: false
+    }, async (progress: vscode.Progress<{ message?: string; increment?: number }>) => {
+        progress.report({ increment: 0 });
+
+        try {
+            const promoteResult = await executeShellCommand(promoteCommand);
+            const promoteResultJson = JSON.parse(promoteResult);
+
+            if (promoteResultJson.status === 0) {
+                vscode.window.showInformationMessage(`Package version ${packageVersionId} promoted successfully.`);
+            } else {
+                vscode.window.showErrorMessage(`Failed to promote package version: ${promoteResultJson.message || 'Unknown error'}`);
+            }
+
+            progress.report({ increment: 100, message: 'Done' });
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to promote package version: ${errorMessage}`);
+            progress.report({ increment: 100, message: 'Done' });
+        }
+    });
+}
+
+async function deletePackage() {
+    // Prompt for package ID
+    const packageId = await vscode.window.showInputBox({
+        prompt: 'Enter the package ID to delete',
+        placeHolder: 'e.g. 0Ho...',
+        ignoreFocusOut: true
+    });
+
+    if (!packageId) {
+        return;
+    }
+
+    // Show warning and confirmation
+    const confirmation = await vscode.window.showQuickPick([
+        { label: 'Yes, delete the package', value: 'yes' },
+        { label: 'No, cancel', value: 'no' }
+    ], {
+        placeHolder: `WARNING: This will delete the package ${packageId}. Make sure all package versions are deleted first. Continue?`,
+        ignoreFocusOut: true
+    });
+
+    if (!confirmation || confirmation.value === 'no') {
+        return;
+    }
+
+    // Prompt for dev hub
+    const devHubUsername = await getDevHubUsername();
+    if (!devHubUsername) {
+        return;
+    }
+
+    // Build command
+    const deleteCommand = `sf package delete --package "${packageId}" --target-dev-hub "${devHubUsername}" --json`;
+
+    const showDeletingPackageProgressNotification = vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Deleting package ${packageId}...`,
+        cancellable: false
+    }, async (progress: vscode.Progress<{ message?: string; increment?: number }>) => {
+        progress.report({ increment: 0 });
+
+        try {
+            const deleteResult = await executeShellCommand(deleteCommand);
+            const deleteResultJson = JSON.parse(deleteResult);
+
+            if (deleteResultJson.status === 0) {
+                vscode.window.showInformationMessage(`Package ${packageId} deleted successfully.`);
+            } else {
+                vscode.window.showErrorMessage(`Failed to delete package: ${deleteResultJson.message || 'Unknown error'}`);
+            }
+
+            progress.report({ increment: 100, message: 'Done' });
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to delete package: ${errorMessage}`);
+            progress.report({ increment: 100, message: 'Done' });
+        }
+    });
+}
+
+async function deletePackageVersion() {
+    // Prompt for package version ID
+    const packageVersionId = await vscode.window.showInputBox({
+        prompt: 'Enter the package version ID to delete',
+        placeHolder: 'e.g. 04t...',
+        ignoreFocusOut: true
+    });
+
+    if (!packageVersionId) {
+        return;
+    }
+
+    // Show warning and confirmation
+    const confirmation = await vscode.window.showQuickPick([
+        { label: 'Yes, delete the package version', value: 'yes' },
+        { label: 'No, cancel', value: 'no' }
+    ], {
+        placeHolder: `WARNING: This action is irreversible. Package version ${packageVersionId} will be permanently deleted. Continue?`,
+        ignoreFocusOut: true
+    });
+
+    if (!confirmation || confirmation.value === 'no') {
+        return;
+    }
+
+    // Prompt for dev hub
+    const devHubUsername = await getDevHubUsername();
+    if (!devHubUsername) {
+        return;
+    }
+
+    // Build command
+    const deleteVersionCommand = `sf package version delete --package "${packageVersionId}" --target-dev-hub "${devHubUsername}" --json`;
+
+    const showDeletingPackageVersionProgressNotification = vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Deleting package version ${packageVersionId}...`,
+        cancellable: false
+    }, async (progress: vscode.Progress<{ message?: string; increment?: number }>) => {
+        progress.report({ increment: 0 });
+
+        try {
+            const deleteVersionResult = await executeShellCommand(deleteVersionCommand);
+            const deleteVersionResultJson = JSON.parse(deleteVersionResult);
+
+            if (deleteVersionResultJson.status === 0) {
+                vscode.window.showInformationMessage(`Package version ${packageVersionId} deleted successfully.`);
+            } else {
+                vscode.window.showErrorMessage(`Failed to delete package version: ${deleteVersionResultJson.message || 'Unknown error'}`);
+            }
+
+            progress.report({ increment: 100, message: 'Done' });
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to delete package version: ${errorMessage}`);
+            progress.report({ increment: 100, message: 'Done' });
+        }
     });
 }

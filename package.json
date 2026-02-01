@@ -2,7 +2,7 @@
   "name": "sf-ext-plus",
   "displayName": "Salesforce Extensions (Plus)",
   "description": "Extra extensions for your Salesforce development",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "icon": "images/icon.png",
   "repository": {
     "url": "https://github.com/renatoliveira/sf-ext-plus",
@@ -10,7 +10,7 @@
   },
   "publisher": "wisefox",
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.99.3"
   },
   "categories": [
     "Other"
@@ -39,6 +39,14 @@
         "title": "Salesforce Ext.+: Manage Permission Sets"
       },
       {
+        "command": "sf-ext-plus.createPermissionSet",
+        "title": "Salesforce Ext.+: Create Permission Set"
+      },
+      {
+        "command": "sf-ext-plus.deletePermissionSet",
+        "title": "Salesforce Ext.+: Delete Permission Set"
+      },
+      {
         "command": "sf-ext-plus.packaging",
         "title": "Salesforce Ext.+: Packaging Commands"
       },
@@ -57,8 +65,43 @@
       {
         "command": "sf-ext-plus.viewObjectInfoOnPanel",
         "title": "Salesforce Ext.+: View Object Information on Panel"
+      },
+      {
+        "command": "sf-ext-plus.refreshPermissionMetadata",
+        "title": "Salesforce Ext.+: Refresh permission metadata (profiles & permission sets)"
+      },
+      {
+        "command": "sf-ext-plus.toggleObjectFieldPermissions",
+        "title": "Salesforce Ext.+: Toggle object/field permissions",
+        "enablement": "resourcePath =~ /\\.(object-meta|field-meta)\\.xml$/"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Salesforce Ext.+",
+      "properties": {
+        "sf-ext-plus.permissionMetadata.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 0,
+          "description": "Interval in minutes for background refresh of permission metadata (profiles and permission sets). Use 0 to disable background refresh."
+        },
+        "sf-ext-plus.createPermissionSet.retrieveAfterCreate": {
+          "type": "boolean",
+          "default": true,
+          "description": "After creating a permission set, retrieve its metadata into the project. When this setting is configured, the create command will not prompt for retrieve; when unset (default), the create command will prompt (default Yes)."
+        },
+        "sf-ext-plus.deletePermissionSet.deleteMetadataFile": {
+          "type": "boolean",
+          "default": false,
+          "description": "When deleting a permission set, also delete its metadata file from the project. When this setting is configured, the delete command will not prompt; when unset (default), the delete command will prompt (default No)."
+        },
+        "sf-ext-plus.permissionEditor.retrieveAfterEdit": {
+          "type": "boolean",
+          "default": true,
+          "description": "After editing object/field permissions and deploying, retrieve the updated Profile or Permission Set metadata into the project. When this setting is configured, the extension will not prompt; when unset, you will be prompted (default Yes)."
+        }
+      }
+    }
   },
   "author": {
     "name": "Renato Oliveira",
@@ -86,7 +129,7 @@
     "@jest/globals": "^29.7.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.17.30",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.99.3",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "@vscode/test-cli": "^0.0.10",

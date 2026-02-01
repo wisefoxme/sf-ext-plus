@@ -1,4 +1,4 @@
-![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus) ![Visual Studio Marketplace Release Date](https://img.shields.io/visual-studio-marketplace/release-date/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus) ![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/stars/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus)
+![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus&cacheSeconds=3600) ![Visual Studio Marketplace Release Date](https://img.shields.io/visual-studio-marketplace/release-date/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus&cacheSeconds=28800) ![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/stars/wisefox.sf-ext-plus?link=https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus&cacheSeconds=28800) ![GitHub License](https://img.shields.io/github/license/renatoliveira/sf-ext-plus?cacheSeconds=28800)
 
 # Salesforce Extension Plus
 
@@ -98,13 +98,13 @@ Example configuration:
 
 ## Authentication
 
-![PGP](https://img.shields.io/keybase/pgp/thelavasailor?style=flat&label=PGP&labelColor=black&color=orange&cacheSeconds=28800)
+![PGP](https://img.shields.io/badge/E7E772797687BC9A-%3F?style=flat&label=PGP&labelColor=orange&color=black&cacheSeconds=28800)
 
-You'll find at the "signatures" folder signed files for the releases and for the license file, so you can verify that the author is indeed the one who signed the files. The key is available at [the author's keybase profile](https://keybase.io/thelavasailor).
+You'll find at the "signatures" folder signed files for the releases and for the license file, so you can verify that the author is indeed the one who signed the files. The key used to sign commits is available at [the author's keybase profile](https://keybase.io/thelavasailor).
 
 ### Verifying the signature
 
-Using keybase, you can verify the signatures using:
+Files are signed using [Keybase](https://keybase.io/). With the keybase CLI installed locally you can verify the signatures using:
 
 ```
 keybase verify --detached signatures/LICENSE.sig -i LICENSE

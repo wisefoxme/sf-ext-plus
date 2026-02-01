@@ -8,55 +8,62 @@ import { activate as activateFieldsCommands } from './commands/fields/main';
 import { activate as activateSoqlPreviewCommands } from './commands/soql/preview/main';
 import { activate as activateUserManagementCommands } from './commands/userenablement/main';
 import { activate as sObjectPreviewCommands } from './commands/objects/main';
+import { activate as activatePermissionEditor } from './commands/permissioneditor/main';
 
 export function activate(context: vscode.ExtensionContext) {
-    activateLabelFeatures(context);
-    activatePermissionSetFeatures(context);
-    activateWatcherFeatures();
-    activatePackageFeatures(context);
-    activateFieldFeatures(context);
-    activateSoqlPreviewFeatures(context);
-    activateUserManagementFeatures(context);
-    activateSObjectPreviewFeatures(context);
-}
+    // #region labels
 
-// Label-related features
-function activateLabelFeatures(context: vscode.ExtensionContext) {
     activateLabelsAutoComplete(context);
     activateLabelCreateOnPalette(context);
-}
 
-// Permission set-related features
-function activatePermissionSetFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+    // #region permission sets
+
     activatePermissionSetCommands(context);
-}
 
-// Watcher-related features
-function activateWatcherFeatures() {
+    // #endregion
+
+    // #region permission editor
+
+    activatePermissionEditor(context);
+
+    // #endregion
+
+    // #region watchers
+
     activeProjectFileWatcher();
-}
 
-// Packaging-related features
-function activatePackageFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+    // #region package commands
+
     activatePackageCommands(context);
-}
 
-// Field-related features
-function activateFieldFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+    // #region fields commands
+
     activateFieldsCommands(context);
-}
 
-// SOQL preview-related features
-function activateSoqlPreviewFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+    // #region fields commands
+
     activateSoqlPreviewCommands(context);
-}
 
-// User management-related features
-function activateUserManagementFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+    // #region fields commands
+
     activateUserManagementCommands(context);
-}
 
-// SObject preview-related features
-function activateSObjectPreviewFeatures(context: vscode.ExtensionContext) {
+    // #endregion
+
+
+    // #region fields commands
+
     sObjectPreviewCommands(context);
+
+    // #endregion
 }
