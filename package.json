@@ -5,7 +5,7 @@
   "version": "0.12.0",
   "icon": "images/icon.png",
   "repository": {
-    "url": "https://github.com/renatoliveira/sf-ext-plus",
+    "url": "https://github.com/wisefoxme/sf-ext-plus",
     "type": "git"
   },
   "publisher": "wisefox",
