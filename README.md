@@ -117,5 +117,5 @@ Files are signed using [Keybase](https://keybase.io/). With the keybase CLI inst
 
 ```
 keybase verify --detached signatures/LICENSE.sig -i LICENSE
-keybase verify --detached signatures/vscode-sf-ext-plus-[semver code].vsix.sig -i vscode-sf-ext-plus-[semver code].vsix
+keybase verify --detached signatures/vscode-sf-ext-plus-[semver code].vsix.sig -i sf-ext-plus-[semver code].vsix
 ```
