@@ -8,6 +8,7 @@ import { activate as activateFieldsCommands } from './commands/fields/main';
 import { activate as activateSoqlPreviewCommands } from './commands/soql/preview/main';
 import { activate as activateUserManagementCommands } from './commands/userenablement/main';
 import { activate as sObjectPreviewCommands } from './commands/objects/main';
+import { activate as activatePermissionEditor } from './commands/permissioneditor/main';
 
 export function activate(context: vscode.ExtensionContext) {
     // #region labels
@@ -20,6 +21,12 @@ export function activate(context: vscode.ExtensionContext) {
     // #region permission sets
 
     activatePermissionSetCommands(context);
+
+    // #endregion
+
+    // #region permission editor
+
+    activatePermissionEditor(context);
 
     // #endregion
 
