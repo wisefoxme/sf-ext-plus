@@ -1,0 +1,33 @@
+name: Publish pre-release to Marketplace
+
+on:
+  push:
+    branches:
+      - "release/**"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run package
+
+      - name: Publish pre-release to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_API_TOKEN }}
+        run: npx -y @vscode/vsce publish --pre-release

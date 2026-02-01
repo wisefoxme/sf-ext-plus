@@ -96,6 +96,15 @@ Example configuration:
   - Find and replace in Flow variables.
   - Find where a certain type, sobject or record type is used within a flow
 
+## Publishing
+
+The extension is published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=wisefox.sf-ext-plus) via GitHub Actions (Git Flow):
+
+- **Pre-release**: Pushes to `release/*` branches build, test, and publish with `--pre-release` (beta channel).
+- **Stable**: Pushing a tag `v*` (e.g. `v0.12.0`) on `main` builds, tests, and publishes the stable version.
+
+Repository secret **`VSCE_MARKETPLACE_TOKEN`** must be set in **Settings → Secrets and variables → Actions** with a [Personal Access Token](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token) for the marketplace publisher.
+
 ## Authentication
 
 ![PGP](https://img.shields.io/badge/E7E772797687BC9A-%3F?style=flat&label=PGP&labelColor=orange&color=black&cacheSeconds=28800)
