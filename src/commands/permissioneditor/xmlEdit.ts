@@ -22,8 +22,8 @@ const BUILDER_OPTIONS = {
     suppressBooleanAttributes: false
 };
 
-type ObjectPermEntry = { allowCreate?: boolean; allowDelete?: boolean; allowEdit?: boolean; allowRead?: boolean; viewAllRecords?: boolean; modifyAllRecords?: boolean; object?: string };
-type FieldPermEntry = { editable?: boolean; readable?: boolean; field?: string };
+type ObjectPermEntry = Record<string, unknown> & { allowCreate?: boolean; allowDelete?: boolean; allowEdit?: boolean; allowRead?: boolean; viewAllRecords?: boolean; modifyAllRecords?: boolean; object?: string };
+type FieldPermEntry = Record<string, unknown> & { editable?: boolean; readable?: boolean; field?: string };
 
 function normalizeToArray<T>(value: T | T[] | undefined): T[] {
     if (value === null || value === undefined) {
@@ -32,12 +32,28 @@ function normalizeToArray<T>(value: T | T[] | undefined): T[] {
     return Array.isArray(value) ? value : [value];
 }
 
+/** Resolve object API name from an entry (handles object vs Object casing from parser). */
+function getObjectEntryName(e: ObjectPermEntry): string {
+    const name = e.object ?? e['Object'];
+    return typeof name === 'string' ? name.trim() : '';
+}
+
+/** Resolve field full name from an entry (handles field vs Field casing from parser). */
+function getFieldEntryName(e: FieldPermEntry): string {
+    const name = e.field ?? e['Field'];
+    return typeof name === 'string' ? name.trim() : '';
+}
+
 function ensureObjectPermissionsInRoot(root: Record<string, unknown>, objectApiName: string, flags: ObjectPermissionFlags): void {
     let list = normalizeToArray(root.objectPermissions as ObjectPermEntry | ObjectPermEntry[] | undefined);
-    let entry = list.find((e) => e.object === objectApiName);
+    let entry = list.find((e) => getObjectEntryName(e) === objectApiName);
     if (!entry) {
         entry = { object: objectApiName };
         list.push(entry);
+    }
+    entry.object = objectApiName;
+    if ('Object' in entry) {
+        delete (entry as Record<string, unknown>)['Object'];
     }
     entry.allowCreate = flags.allowCreate;
     entry.allowDelete = flags.allowDelete;
@@ -50,10 +66,14 @@ function ensureObjectPermissionsInRoot(root: Record<string, unknown>, objectApiN
 
 function ensureFieldPermissionsInRoot(root: Record<string, unknown>, fieldFullName: string, flags: FieldPermissionFlags): void {
     let list = normalizeToArray(root.fieldPermissions as FieldPermEntry | FieldPermEntry[] | undefined);
-    let entry = list.find((e) => e.field === fieldFullName);
+    let entry = list.find((e) => getFieldEntryName(e) === fieldFullName);
     if (!entry) {
         entry = { field: fieldFullName };
         list.push(entry);
+    }
+    entry.field = fieldFullName;
+    if ('Field' in entry) {
+        delete (entry as Record<string, unknown>)['Field'];
     }
     entry.editable = flags.editable;
     entry.readable = flags.readable;

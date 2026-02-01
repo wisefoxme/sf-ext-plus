@@ -119,139 +119,220 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
     }
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-    let sfContext: { cwd: string; targetOrg: string };
-    try {
-        sfContext = await getDefaultOrgContext(workspaceRoot);
-    } catch (err) {
-        vscode.window.showErrorMessage(
-            `Could not resolve default org: ${(err as Error).message}`
-        );
-        return;
-    }
-
-    if (focused.kind === 'object') {
-        const existingRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
-        const defaultFlags: ObjectPermissionFlags = {
-            allowCreate: false,
-            allowDelete: false,
-            allowEdit: false,
-            allowRead: false,
-            viewAllRecords: false,
-            modifyAllRecords: false
-        };
-        const merged = existingRecords.length > 0
-            ? objectPermissionsRecordToFlags(existingRecords[0])
-            : defaultFlags;
-
-        const permItems = OBJECT_PERMISSION_LABELS.map(({ value, label }) => ({
-            label,
-            value,
-            picked: merged[value]
-        }));
-        const selectedPerms = await vscode.window.showQuickPick(permItems, {
-            placeHolder: 'Select CRUD permissions to grant for this object',
-            canPickMany: true
-        });
-        if (selectedPerms === undefined) {return;}
-
-        const rawFlags: ObjectPermissionFlags = {
-            allowCreate: selectedPerms.some((p) => p.value === 'allowCreate'),
-            allowDelete: selectedPerms.some((p) => p.value === 'allowDelete'),
-            allowEdit: selectedPerms.some((p) => p.value === 'allowEdit'),
-            allowRead: selectedPerms.some((p) => p.value === 'allowRead'),
-            viewAllRecords: selectedPerms.some((p) => p.value === 'viewAllRecords'),
-            modifyAllRecords: selectedPerms.some((p) => p.value === 'modifyAllRecords')
-        };
-        const flags = normalizeObjectPermissionFlags(rawFlags);
-
-        const filesToDeploy: string[] = [];
-        for (const target of selectedTargets) {
-            const filePathResolved = await resolveMetadataFile(workspaceRoot, target.targetKind, target.name);
-            if (!filePathResolved) {
-                vscode.window.showErrorMessage(`Could not find or retrieve metadata for ${target.label}.`);
-                continue;
-            }
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Toggle object/field permissions',
+            cancellable: false
+        },
+        async (progress) => {
+            progress.report({ message: 'Resolving default org...' });
+            let sfContext: { cwd: string; targetOrg: string };
             try {
-                applyObjectPermissionsToFile(filePathResolved, focused.objectApiName, flags);
-                filesToDeploy.push(filePathResolved);
+                sfContext = await getDefaultOrgContext(workspaceRoot);
             } catch (err) {
-                vscode.window.showErrorMessage(`Failed to update ${target.label}: ${(err as Error).message}`);
+                vscode.window.showErrorMessage(
+                    `Could not resolve default org: ${(err as Error).message}`
+                );
+                return;
             }
-        }
-        if (filesToDeploy.length > 0) {
-            await deployMetadataFiles(filesToDeploy);
-        }
-        return;
-    }
 
-    if (focused.kind === 'field') {
-        const existingObjectRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
-        const existingFieldRecords = await queryFieldPermissions(
-            parentIds,
-            focused.objectApiName,
-            focused.fieldFullName,
-            sfContext
-        );
-        const objectFlags: ObjectPermissionFlags = existingObjectRecords.length > 0
-            ? objectPermissionsRecordToFlags(existingObjectRecords[0])
-            : { allowCreate: false, allowDelete: false, allowEdit: false, allowRead: true, viewAllRecords: false, modifyAllRecords: false };
-        const fieldFlagsFromRecord = existingFieldRecords.length > 0
-            ? fieldPermissionsRecordToFlags(existingFieldRecords[0])
-            : { readable: false, editable: false };
-        const needsObjectAccess = existingObjectRecords.length === 0;
-        if (needsObjectAccess) {
-            objectFlags.allowRead = true;
-        }
+            if (focused.kind === 'object') {
+                progress.report({ message: 'Querying object permissions...' });
+                const existingRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
+                const defaultFlags: ObjectPermissionFlags = {
+                    allowCreate: false,
+                    allowDelete: false,
+                    allowEdit: false,
+                    allowRead: false,
+                    viewAllRecords: false,
+                    modifyAllRecords: false
+                };
+                const merged = existingRecords.length > 0
+                    ? objectPermissionsRecordToFlags(existingRecords[0])
+                    : defaultFlags;
 
-        const permItems = FIELD_PERMISSION_LABELS.map(({ value, label }) => ({
-            label,
-            value,
-            picked: fieldFlagsFromRecord[value]
-        }));
-        const selectedPerms = await vscode.window.showQuickPick(permItems, {
-            placeHolder: needsObjectAccess
-                ? 'Select field permissions. Object access will be added if missing.'
-                : 'Select field permissions (Read / Edit)',
-            canPickMany: true
-        });
-        if (selectedPerms === undefined) {return;}
+                const permItems = OBJECT_PERMISSION_LABELS.map(({ value, label }) => ({
+                    label,
+                    value,
+                    picked: merged[value]
+                }));
+                const selectedPerms = await vscode.window.showQuickPick(permItems, {
+                    placeHolder: 'Select CRUD permissions to grant for this object',
+                    canPickMany: true
+                });
+                if (selectedPerms === undefined) {return;}
 
-        const rawFieldFlags: FieldPermissionFlags = {
-            readable: selectedPerms.some((p) => p.value === 'readable'),
-            editable: selectedPerms.some((p) => p.value === 'editable')
-        };
-        const fieldFlags = normalizeFieldPermissionFlags(rawFieldFlags);
+                const rawFlags: ObjectPermissionFlags = {
+                    allowCreate: selectedPerms.some((p) => p.value === 'allowCreate'),
+                    allowDelete: selectedPerms.some((p) => p.value === 'allowDelete'),
+                    allowEdit: selectedPerms.some((p) => p.value === 'allowEdit'),
+                    allowRead: selectedPerms.some((p) => p.value === 'allowRead'),
+                    viewAllRecords: selectedPerms.some((p) => p.value === 'viewAllRecords'),
+                    modifyAllRecords: selectedPerms.some((p) => p.value === 'modifyAllRecords')
+                };
+                const flags = normalizeObjectPermissionFlags(rawFlags);
 
-        const filesToDeploy: string[] = [];
-        for (const target of selectedTargets) {
-            const filePathResolved = await resolveMetadataFile(workspaceRoot, target.targetKind, target.name);
-            if (!filePathResolved) {
-                vscode.window.showErrorMessage(`Could not find or retrieve metadata for ${target.label}.`);
-                continue;
+                progress.report({ message: 'Applying permissions to metadata files...' });
+                const filesToDeploy: string[] = [];
+                for (const target of selectedTargets) {
+                    const filePathResolved = await resolveMetadataFile(workspaceRoot, target.targetKind, target.name);
+                    if (!filePathResolved) {
+                        vscode.window.showErrorMessage(`Could not find or retrieve metadata for ${target.label}.`);
+                        continue;
+                    }
+                    try {
+                        applyObjectPermissionsToFile(filePathResolved, focused.objectApiName, flags);
+                        filesToDeploy.push(filePathResolved);
+                    } catch (err) {
+                        vscode.window.showErrorMessage(`Failed to update ${target.label}: ${(err as Error).message}`);
+                    }
+                }
+                if (filesToDeploy.length > 0) {
+                    progress.report({ message: 'Deploying...' });
+                    const deployOk = await deployMetadataFiles(filesToDeploy);
+                    if (deployOk) {
+                        await maybeRetrieveAfterDeploy(sfContext.targetOrg, selectedTargets);
+                    }
+                }
+                return;
             }
-            try {
-                applyFieldPermissionsToFile(
-                    filePathResolved,
+
+            if (focused.kind === 'field') {
+                progress.report({ message: 'Querying object and field permissions...' });
+                const existingObjectRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
+                const existingFieldRecords = await queryFieldPermissions(
+                    parentIds,
                     focused.objectApiName,
                     focused.fieldFullName,
-                    objectFlags,
-                    fieldFlags
+                    sfContext
                 );
-                filesToDeploy.push(filePathResolved);
-            } catch (err) {
-                vscode.window.showErrorMessage(`Failed to update ${target.label}: ${(err as Error).message}`);
+                const objectFlags: ObjectPermissionFlags = existingObjectRecords.length > 0
+                    ? objectPermissionsRecordToFlags(existingObjectRecords[0])
+                    : { allowCreate: false, allowDelete: false, allowEdit: false, allowRead: true, viewAllRecords: false, modifyAllRecords: false };
+                const fieldFlagsFromRecord = existingFieldRecords.length > 0
+                    ? fieldPermissionsRecordToFlags(existingFieldRecords[0])
+                    : { readable: false, editable: false };
+                const needsObjectAccess = existingObjectRecords.length === 0;
+                if (needsObjectAccess) {
+                    objectFlags.allowRead = true;
+                }
+
+                const permItems = FIELD_PERMISSION_LABELS.map(({ value, label }) => ({
+                    label,
+                    value,
+                    picked: fieldFlagsFromRecord[value]
+                }));
+                const selectedPerms = await vscode.window.showQuickPick(permItems, {
+                    placeHolder: needsObjectAccess
+                        ? 'Select field permissions. Object access will be added if missing.'
+                        : 'Select field permissions (Read / Edit)',
+                    canPickMany: true
+                });
+                if (selectedPerms === undefined) {return;}
+
+                const rawFieldFlags: FieldPermissionFlags = {
+                    readable: selectedPerms.some((p) => p.value === 'readable'),
+                    editable: selectedPerms.some((p) => p.value === 'editable')
+                };
+                const fieldFlags = normalizeFieldPermissionFlags(rawFieldFlags);
+
+                progress.report({ message: 'Applying permissions to metadata files...' });
+                const filesToDeploy: string[] = [];
+                for (const target of selectedTargets) {
+                    const filePathResolved = await resolveMetadataFile(workspaceRoot, target.targetKind, target.name);
+                    if (!filePathResolved) {
+                        vscode.window.showErrorMessage(`Could not find or retrieve metadata for ${target.label}.`);
+                        continue;
+                    }
+                    try {
+                        applyFieldPermissionsToFile(
+                            filePathResolved,
+                            focused.objectApiName,
+                            focused.fieldFullName,
+                            objectFlags,
+                            fieldFlags
+                        );
+                        filesToDeploy.push(filePathResolved);
+                    } catch (err) {
+                        vscode.window.showErrorMessage(`Failed to update ${target.label}: ${(err as Error).message}`);
+                    }
+                }
+                if (filesToDeploy.length > 0) {
+                    progress.report({ message: 'Deploying...' });
+                    const deployOk = await deployMetadataFiles(filesToDeploy);
+                    if (deployOk) {
+                        await maybeRetrieveAfterDeploy(sfContext.targetOrg, selectedTargets);
+                    }
+                }
             }
         }
-        if (filesToDeploy.length > 0) {
-            await deployMetadataFiles(filesToDeploy);
-        }
-    }
+    );
 }
 
-async function deployMetadataFiles(filePaths: string[]): Promise<void> {
-    if (filePaths.length === 0) {return;}
+const CONFIG_SECTION = 'sf-ext-plus';
+const CONFIG_KEY_RETRIEVE_AFTER_EDIT = 'permissionEditor.retrieveAfterEdit';
+
+async function maybeRetrieveAfterDeploy(targetOrg: string, selectedTargets: TargetItem[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+    const retrieveSettingInspect = config.inspect<boolean>(CONFIG_KEY_RETRIEVE_AFTER_EDIT);
+    const userSetRetrieve =
+        retrieveSettingInspect?.globalValue !== undefined || retrieveSettingInspect?.workspaceValue !== undefined;
+
+    let doRetrieve: boolean;
+    if (userSetRetrieve) {
+        doRetrieve = config.get<boolean>(CONFIG_KEY_RETRIEVE_AFTER_EDIT, true);
+    } else {
+        const retrievePick = await vscode.window.showQuickPick(
+            [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+            {
+                placeHolder: 'Retrieve metadata to sync permission set/profile files?',
+                title: 'Retrieve metadata',
+                ignoreFocusOut: true
+            }
+        );
+        if (retrievePick === undefined) {
+            return;
+        }
+        doRetrieve = retrievePick.value;
+    }
+
+    if (!doRetrieve) {
+        return;
+    }
+
+    const metaArgs = selectedTargets
+        .map((t) => (t.targetKind === 'profile' ? `Profile:${t.name}` : `PermissionSet:${t.name}`))
+        .map((m) => `-m ${JSON.stringify(m)}`)
+        .join(' ');
+    const cmd = `sf project retrieve start ${metaArgs} --target-org ${JSON.stringify(targetOrg)} --json`;
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Retrieving permission set/profile metadata...',
+            cancellable: false
+        },
+        async () => {
+            try {
+                const out = await executeShellCommand(cmd, (s) => s);
+                const json = JSON.parse(out) as { status?: number; message?: string };
+                if (json.status !== 0) {
+                    vscode.window.showErrorMessage(`Retrieve failed: ${json.message ?? 'Unknown error'}`);
+                    return;
+                }
+                vscode.window.showInformationMessage(`Retrieved metadata for ${selectedTargets.length} file(s).`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Retrieve failed: ${(err as Error).message}`);
+            }
+        }
+    );
+}
+
+async function deployMetadataFiles(filePaths: string[]): Promise<boolean> {
+    if (filePaths.length === 0) {return false;}
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders?.length) {return;}
+    if (!workspaceFolders?.length) {return false;}
     const sourceDirs = [...new Set(filePaths.map((p) => path.dirname(p)))];
     let anyFailed = false;
     for (const dir of sourceDirs) {
@@ -271,4 +352,5 @@ async function deployMetadataFiles(filePaths: string[]): Promise<void> {
     if (!anyFailed && filePaths.length > 0) {
         vscode.window.showInformationMessage(`Deployed ${filePaths.length} metadata file(s).`);
     }
+    return !anyFailed;
 }

@@ -94,6 +94,11 @@
           "type": "boolean",
           "default": false,
           "description": "When deleting a permission set, also delete its metadata file from the project. When this setting is configured, the delete command will not prompt; when unset (default), the delete command will prompt (default No)."
+        },
+        "sf-ext-plus.permissionEditor.retrieveAfterEdit": {
+          "type": "boolean",
+          "default": true,
+          "description": "After editing object/field permissions and deploying, retrieve the updated Profile or Permission Set metadata into the project. When this setting is configured, the extension will not prompt; when unset, you will be prompted (default Yes)."
         }
       }
     }
