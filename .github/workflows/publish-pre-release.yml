@@ -28,6 +28,4 @@ jobs:
         run: npm run package
 
       - name: Publish pre-release to VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_API_TOKEN }}
-        run: npx -y @vscode/vsce publish --pre-release
+        run: npx @vscode/vsce publish -p ${{ secrets.VSCE_API_TOKEN }} --pre-release

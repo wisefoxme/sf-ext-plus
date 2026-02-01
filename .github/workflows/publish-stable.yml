@@ -28,6 +28,4 @@ jobs:
         run: npm run package
 
       - name: Publish stable to VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_API_TOKEN }}
-        run: npx -y @vscode/vsce publish
+        run: npx @vscode/vsce publish -p ${{ secrets.VSCE_API_TOKEN }}
