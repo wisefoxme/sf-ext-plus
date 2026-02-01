@@ -2,7 +2,7 @@
   "name": "sf-ext-plus",
   "displayName": "Salesforce Extensions (Plus)",
   "description": "Extra extensions for your Salesforce development",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "icon": "images/icon.png",
   "repository": {
     "url": "https://github.com/renatoliveira/sf-ext-plus",
@@ -37,6 +37,14 @@
       {
         "command": "sf-ext-plus.assignPermissionSets",
         "title": "Salesforce Ext.+: Assign Permission Sets"
+      },
+      {
+        "command": "sf-ext-plus.createPermissionSet",
+        "title": "Salesforce Ext.+: Create Permission Set"
+      },
+      {
+        "command": "sf-ext-plus.deletePermissionSet",
+        "title": "Salesforce Ext.+: Delete Permission Set"
       },
       {
         "command": "sf-ext-plus.packaging",
@@ -76,6 +84,16 @@
           "default": 15,
           "minimum": 0,
           "description": "Interval in minutes for background refresh of permission metadata (profiles and permission sets). Use 0 to disable background refresh."
+        },
+        "sf-ext-plus.createPermissionSet.retrieveAfterCreate": {
+          "type": "boolean",
+          "default": true,
+          "description": "After creating a permission set, retrieve its metadata into the project. When this setting is configured, the create command will not prompt for retrieve; when unset (default), the create command will prompt (default Yes)."
+        },
+        "sf-ext-plus.deletePermissionSet.deleteMetadataFile": {
+          "type": "boolean",
+          "default": false,
+          "description": "When deleting a permission set, also delete its metadata file from the project. When this setting is configured, the delete command will not prompt; when unset (default), the delete command will prompt (default No)."
         }
       }
     }

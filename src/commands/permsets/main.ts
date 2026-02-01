@@ -3,21 +3,33 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import labels from '../../labels';
 import { clearAndHideStatusBarText, executeShellCommand, setStatusBarText, setUpStatusBarWidget } from '../shared/utilities';
+import { createPermissionSet } from './create';
+import { deletePermissionSet } from './delete';
 
 const COMMAND_NAME = 'assignPermissionSets';
+const CREATE_PERMISSION_SET_COMMAND = 'createPermissionSet';
+const DELETE_PERMISSION_SET_COMMAND = 'deletePermissionSet';
 
 let salesforceUserId: string | undefined = undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     const commands = await vscode.commands.getCommands(true);
+    const assignCmd = `${labels.misc.EXTENSION_NAME}.${COMMAND_NAME}`;
+    const createCmd = `${labels.misc.EXTENSION_NAME}.${CREATE_PERMISSION_SET_COMMAND}`;
+    const deleteCmd = `${labels.misc.EXTENSION_NAME}.${DELETE_PERMISSION_SET_COMMAND}`;
 
-    if (commands.includes(`${labels.misc.EXTENSION_NAME}.${COMMAND_NAME}`)) {
-        return;
+    if (!commands.includes(assignCmd)) {
+        const loadLabelsCommand = vscode.commands.registerCommand(assignCmd, loadPermissionSets);
+        context.subscriptions.push(loadLabelsCommand);
     }
-
-    const loadLabelsCommand = vscode.commands.registerCommand(`${labels.misc.EXTENSION_NAME}.${COMMAND_NAME}`, loadPermissionSets);
-
-    context.subscriptions.push(loadLabelsCommand);
+    if (!commands.includes(createCmd)) {
+        const createPermissionSetCommand = vscode.commands.registerCommand(createCmd, createPermissionSet);
+        context.subscriptions.push(createPermissionSetCommand);
+    }
+    if (!commands.includes(deleteCmd)) {
+        const deletePermissionSetCommand = vscode.commands.registerCommand(deleteCmd, deletePermissionSet);
+        context.subscriptions.push(deletePermissionSetCommand);
+    }
 
     setUpStatusBarWidget();
 }

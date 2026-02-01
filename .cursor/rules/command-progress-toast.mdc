@@ -1,0 +1,57 @@
+---
+description: Use progress toast for async or CLI-based command operations
+globs: src/commands/**/*.ts
+alwaysApply: false
+---
+
+# Progress Toast for Commands
+
+When implementing or changing a command that performs **asynchronous work** or **relies on the CLI** (e.g. `sf`), show a progress notification so the user sees the extension is still active.
+
+## Requirement
+
+Wrap the async/CLI work in `vscode.window.withProgress` with **notification** location (toast). Use `progress.report({ message: '...' })` to update the message during the operation.
+
+## Pattern
+
+```typescript
+await vscode.window.withProgress(
+    {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Short title for the operation...',
+        cancellable: false
+    },
+    async (progress) => {
+        progress.report({ message: 'Step or current action...' });
+        // async work or CLI calls
+    }
+);
+```
+
+## When to apply
+
+- Command handler runs `await` on I/O, HTTP, or CLI execution.
+- Operation may take more than a moment and has no other visible feedback.
+
+## When to skip
+
+- Synchronous, in-memory only logic.
+- Quick validations that fail fast with an error message.
+- Operations that already show progress elsewhere (e.g. Source Control).
+
+## Example (from codebase)
+
+```typescript
+// Creating permission set (async + API)
+await vscode.window.withProgress(
+    {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Creating permission set...',
+        cancellable: false
+    },
+    async (progress) => {
+        progress.report({ message: 'Retrieving permission set metadata...' });
+        // ...
+    }
+);
+```
