@@ -16,6 +16,7 @@ import { queryObjectPermissions, queryFieldPermissions } from './soql';
 import { objectPermissionsRecordToFlags, fieldPermissionsRecordToFlags } from './soqlMappers';
 import { applyObjectPermissionsToFile, applyFieldPermissionsToFile } from './xmlEdit';
 import { resolveMetadataFile } from './resolve';
+import { normalizeObjectPermissionFlags, normalizeFieldPermissionFlags } from './permissionFlags';
 import type { ObjectPermissionFlags, FieldPermissionFlags } from '../shared/types';
 
 const OBJECT_PERMISSION_LABELS: { value: keyof ObjectPermissionFlags; label: string }[] = [
@@ -153,7 +154,7 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
         });
         if (selectedPerms === undefined) {return;}
 
-        const flags: ObjectPermissionFlags = {
+        const rawFlags: ObjectPermissionFlags = {
             allowCreate: selectedPerms.some((p) => p.value === 'allowCreate'),
             allowDelete: selectedPerms.some((p) => p.value === 'allowDelete'),
             allowEdit: selectedPerms.some((p) => p.value === 'allowEdit'),
@@ -161,6 +162,7 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
             viewAllRecords: selectedPerms.some((p) => p.value === 'viewAllRecords'),
             modifyAllRecords: selectedPerms.some((p) => p.value === 'modifyAllRecords')
         };
+        const flags = normalizeObjectPermissionFlags(rawFlags);
 
         const filesToDeploy: string[] = [];
         for (const target of selectedTargets) {
@@ -214,10 +216,11 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
         });
         if (selectedPerms === undefined) {return;}
 
-        const fieldFlags: FieldPermissionFlags = {
+        const rawFieldFlags: FieldPermissionFlags = {
             readable: selectedPerms.some((p) => p.value === 'readable'),
             editable: selectedPerms.some((p) => p.value === 'editable')
         };
+        const fieldFlags = normalizeFieldPermissionFlags(rawFieldFlags);
 
         const filesToDeploy: string[] = [];
         for (const target of selectedTargets) {

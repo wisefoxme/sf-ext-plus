@@ -7,6 +7,10 @@ import {
     objectPermissionsRecordToFlags,
     fieldPermissionsRecordToFlags
 } from '../commands/permissioneditor/soqlMappers';
+import {
+    normalizeObjectPermissionFlags,
+    normalizeFieldPermissionFlags
+} from '../commands/permissioneditor/permissionFlags';
 import type { ObjectPermissionsRecord, FieldPermissionsRecord } from '../commands/shared/types';
 
 describe('permission editor path', () => {
@@ -97,6 +101,75 @@ describe('permission editor SOQL mapping', () => {
             PermissionsEdit: false
         };
         const flags = fieldPermissionsRecordToFlags(record);
+        expect(flags.readable).toBe(true);
+        expect(flags.editable).toBe(false);
+    });
+});
+
+describe('permission editor implied permissions', () => {
+    test('normalizeObjectPermissionFlags: viewAllRecords implies allowRead', () => {
+        const flags = normalizeObjectPermissionFlags({
+            allowCreate: false,
+            allowDelete: false,
+            allowEdit: false,
+            allowRead: false,
+            viewAllRecords: true,
+            modifyAllRecords: false
+        });
+        expect(flags.allowRead).toBe(true);
+        expect(flags.viewAllRecords).toBe(true);
+    });
+
+    test('normalizeObjectPermissionFlags: modifyAllRecords implies allowRead and allowEdit', () => {
+        const flags = normalizeObjectPermissionFlags({
+            allowCreate: false,
+            allowDelete: false,
+            allowEdit: false,
+            allowRead: false,
+            viewAllRecords: false,
+            modifyAllRecords: true
+        });
+        expect(flags.allowRead).toBe(true);
+        expect(flags.allowEdit).toBe(true);
+        expect(flags.modifyAllRecords).toBe(true);
+    });
+
+    test('normalizeObjectPermissionFlags: allowEdit implies allowRead', () => {
+        const flags = normalizeObjectPermissionFlags({
+            allowCreate: false,
+            allowDelete: false,
+            allowEdit: true,
+            allowRead: false,
+            viewAllRecords: false,
+            modifyAllRecords: false
+        });
+        expect(flags.allowRead).toBe(true);
+        expect(flags.allowEdit).toBe(true);
+    });
+
+    test('normalizeObjectPermissionFlags: leaves other flags unchanged', () => {
+        const flags = normalizeObjectPermissionFlags({
+            allowCreate: true,
+            allowDelete: true,
+            allowEdit: false,
+            allowRead: false,
+            viewAllRecords: false,
+            modifyAllRecords: false
+        });
+        expect(flags.allowCreate).toBe(true);
+        expect(flags.allowDelete).toBe(true);
+        expect(flags.allowEdit).toBe(false);
+        expect(flags.allowRead).toBe(false);
+    });
+
+    test('normalizeFieldPermissionFlags: editable implies readable', () => {
+        const flags = normalizeFieldPermissionFlags({ readable: false, editable: true });
+        expect(flags.readable).toBe(true);
+        expect(flags.editable).toBe(true);
+    });
+
+    test('normalizeFieldPermissionFlags: leaves readable-only unchanged', () => {
+        const flags = normalizeFieldPermissionFlags({ readable: true, editable: false });
         expect(flags.readable).toBe(true);
         expect(flags.editable).toBe(false);
     });

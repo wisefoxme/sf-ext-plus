@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import type { ObjectPermissionFlags, FieldPermissionFlags } from '../shared/types';
+import { normalizeObjectPermissionFlags, normalizeFieldPermissionFlags } from './permissionFlags';
 
 const PARSER_OPTIONS = {
     ignoreAttributes: false,
@@ -77,6 +78,7 @@ function getRoot(parsed: Record<string, unknown>): Record<string, unknown> | nul
  * Creates or updates the objectPermissions entry for the given object.
  */
 export function applyObjectPermissionsToFile(filePath: string, objectApiName: string, flags: ObjectPermissionFlags): void {
+    const normalized = normalizeObjectPermissionFlags(flags);
     const xml = fs.readFileSync(filePath, 'utf8');
     const parser = new XMLParser(PARSER_OPTIONS);
     const parsed = parser.parse(xml) as Record<string, unknown>;
@@ -84,7 +86,7 @@ export function applyObjectPermissionsToFile(filePath: string, objectApiName: st
     if (!root) {
         throw new Error(`Unsupported metadata root in ${filePath}`);
     }
-    ensureObjectPermissionsInRoot(root, objectApiName, flags);
+    ensureObjectPermissionsInRoot(root, objectApiName, normalized);
     const builder = new XMLBuilder(BUILDER_OPTIONS);
     const out = builder.build(parsed);
     fs.writeFileSync(filePath, out, 'utf8');
@@ -101,6 +103,8 @@ export function applyFieldPermissionsToFile(
     objectFlags: ObjectPermissionFlags,
     fieldFlags: FieldPermissionFlags
 ): void {
+    const normalizedObject = normalizeObjectPermissionFlags(objectFlags);
+    const normalizedField = normalizeFieldPermissionFlags(fieldFlags);
     const xml = fs.readFileSync(filePath, 'utf8');
     const parser = new XMLParser(PARSER_OPTIONS);
     const parsed = parser.parse(xml) as Record<string, unknown>;
@@ -108,8 +112,8 @@ export function applyFieldPermissionsToFile(
     if (!root) {
         throw new Error(`Unsupported metadata root in ${filePath}`);
     }
-    ensureObjectPermissionsInRoot(root, objectApiName, objectFlags);
-    ensureFieldPermissionsInRoot(root, fieldFullName, fieldFlags);
+    ensureObjectPermissionsInRoot(root, objectApiName, normalizedObject);
+    ensureFieldPermissionsInRoot(root, fieldFullName, normalizedField);
     const builder = new XMLBuilder(BUILDER_OPTIONS);
     const out = builder.build(parsed);
     fs.writeFileSync(filePath, out, 'utf8');
