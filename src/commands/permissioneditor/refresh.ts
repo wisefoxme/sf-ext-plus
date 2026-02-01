@@ -2,8 +2,8 @@
  * Refresh permission metadata: fetches Profiles and Permission Sets from the org via Salesforce CLI
  * and stores in extension globalState.
  */
+import * as cp from 'child_process';
 import * as vscode from 'vscode';
-import { executeShellCommand } from '../shared/utilities';
 import type { CachedProfile, CachedPermissionSet } from '../shared/types';
 
 const GLOBAL_STATE_KEY_PROFILES = 'permissionEditor.profiles';
@@ -28,11 +28,124 @@ export function getProfilePermissionSetIds(context: vscode.ExtensionContext): Re
     return context.globalState.get<Record<string, string>>(GLOBAL_STATE_KEY_PROFILE_PERM_SET_IDS) ?? {};
 }
 
+interface SfQueryPayload<T> {
+    status?: number;
+    result?: { records?: T[] };
+    message?: string;
+    name?: string;
+}
+
+interface OrgListEntry {
+    username?: string;
+    alias?: string;
+    isDefaultUsername?: boolean;
+}
+
+interface SfOrgListPayload {
+    status?: number;
+    result?: {
+        nonScratchOrgs?: OrgListEntry[];
+        sandboxes?: OrgListEntry[];
+        scratchOrgs?: OrgListEntry[];
+        other?: OrgListEntry[];
+    };
+    message?: string;
+    name?: string;
+}
+
 /**
- * Runs the two sf data query calls (Profile, PermissionSet) and stores results in globalState.
- * Also queries profile-backed PermissionSet Ids for ObjectPermissions/FieldPermissions lookups.
+ * Run a shell command with optional cwd and return stdout. On failure, parses JSON from stdout for the CLI message.
+ */
+function runSfCommand(
+    args: string[],
+    options: { cwd: string }
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const cmd = `sf ${args.join(' ')}`;
+        cp.exec(cmd, { cwd: options.cwd }, (err, stdout, stderr) => {
+            if (err) {
+                let msg = err.message;
+                try {
+                    const parsed = JSON.parse(stdout || '{}') as { message?: string; name?: string };
+                    msg = parsed.message ?? parsed.name ?? stderr?.trim() ?? msg;
+                } catch {
+                    msg = stderr?.trim() ?? msg;
+                }
+                return reject(new Error(msg));
+            }
+            resolve(stdout ?? '');
+        });
+    });
+}
+
+/**
+ * Get the default org username by running sf org list --json in the workspace.
+ * Returns the username of the org with isDefaultUsername === true.
+ */
+export async function getDefaultOrgUsername(workspaceRoot: string): Promise<string> {
+    const out = await runSfCommand(['org', 'list', '--json'], { cwd: workspaceRoot });
+    const parsed = JSON.parse(out) as SfOrgListPayload;
+    if (parsed.status !== 0 && parsed.status !== undefined) {
+        throw new Error(parsed.message ?? 'Failed to list orgs');
+    }
+    const result = parsed.result ?? {};
+    const allOrgs: OrgListEntry[] = [
+        ...(result.nonScratchOrgs ?? []),
+        ...(result.sandboxes ?? []),
+        ...(result.scratchOrgs ?? []),
+        ...(result.other ?? [])
+    ];
+    const defaultOrg = allOrgs.find((org) => org.isDefaultUsername === true);
+    if (!defaultOrg?.username) {
+        throw new Error(
+            'No default org set. Set a default org in the project or run "sf config set target-org <alias>" in the workspace.'
+        );
+    }
+    return defaultOrg.username;
+}
+
+/**
+ * Get workspace root and default org for running sf commands in the same context as the terminal.
+ */
+export async function getDefaultOrgContext(workspaceRoot: string): Promise<{ cwd: string; targetOrg: string }> {
+    const targetOrg = await getDefaultOrgUsername(workspaceRoot);
+    return { cwd: workspaceRoot, targetOrg };
+}
+
+/**
+ * Run sf data query with cwd and target-org so the extension uses the same context as the terminal.
+ */
+function runSfDataQuery<T>(
+    soql: string,
+    options: { cwd: string; targetOrg: string }
+): Promise<SfQueryPayload<T>> {
+    return new Promise((resolve, reject) => {
+        const targetOrgArg = `--target-org ${JSON.stringify(options.targetOrg)}`;
+        const cmd = `sf data query --query ${JSON.stringify(soql)} ${targetOrgArg} --json`;
+        cp.exec(cmd, { cwd: options.cwd }, (err, stdout, stderr) => {
+            let parsed: SfQueryPayload<T>;
+            try {
+                parsed = JSON.parse(stdout || '{}') as SfQueryPayload<T>;
+            } catch {
+                parsed = {};
+            }
+            if (err) {
+                const msg = parsed.message ?? parsed.name ?? stderr?.trim() ?? err.message;
+                return reject(new Error(msg));
+            }
+            if (parsed.status !== 0 && parsed.status !== undefined) {
+                return reject(new Error(parsed.message ?? 'Query failed'));
+            }
+            resolve(parsed);
+        });
+    });
+}
+
+/**
+ * Runs sf org list to resolve the default org, then the three sf data query calls in parallel,
+ * with cwd set to the workspace so the CLI uses the same context as the terminal.
  * @param context - Extension context for globalState
- * @param showMessage - If true, show info/error messages to the user (e.g. when run from command). If false, fail silently (e.g. background refresh).
+ * @param showMessage - If true, show progress toast and info/error messages. If false, fail silently (e.g. background refresh).
  */
 export async function refreshPermissionMetadata(
     context: vscode.ExtensionContext,
@@ -46,74 +159,81 @@ export async function refreshPermissionMetadata(
         return undefined;
     }
 
-    const cwd = workspaceFolders[0].uri.fsPath;
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-    try {
-        const profilesQuery = `sf data query --query "SELECT Id, Name FROM Profile" --json`;
-        const profilesOutput = await executeShellCommand(profilesQuery, (out) => out);
-        const profilesJson = JSON.parse(profilesOutput) as { status?: number; result?: { records?: { Id: string; Name: string }[] }; message?: string };
-        if (profilesJson.status !== 0) {
-            if (showMessage) {
-                vscode.window.showErrorMessage(`Failed to get profiles: ${profilesJson.message ?? 'Unknown error'}`);
+    const doRefresh = async (
+        progress?: vscode.Progress<{ message?: string }>
+    ): Promise<RefreshResult | undefined> => {
+        try {
+            if (progress?.report) {
+                progress.report({ message: 'Listing environments...' });
             }
-            return undefined;
-        }
-        const profileRecords = profilesJson.result?.records ?? [];
-        const profiles: CachedProfile[] = profileRecords.map((r: { Id: string; Name: string }) => ({ id: r.Id, name: r.Name }));
+            const targetOrg = await getDefaultOrgUsername(workspaceRoot);
 
-        const permSetsQuery = `sf data query --query "SELECT Id, Name, Label, NamespacePrefix, IsOwnedByProfile FROM PermissionSet WHERE IsOwnedByProfile = false" --json`;
-        const permSetsOutput = await executeShellCommand(permSetsQuery, (out) => out);
-        const permSetsJson = JSON.parse(permSetsOutput) as {
-            status?: number;
-            result?: { records?: { Id: string; Name: string; Label?: string; NamespacePrefix?: string; IsOwnedByProfile?: boolean }[] };
-            message?: string;
-        };
-        if (permSetsJson.status !== 0) {
-            if (showMessage) {
-                vscode.window.showErrorMessage(`Failed to get permission sets: ${permSetsJson.message ?? 'Unknown error'}`);
+            if (progress?.report) {
+                progress.report({ message: 'Loading profiles and permission sets...' });
             }
-            return undefined;
-        }
-        const permSetRecords = permSetsJson.result?.records ?? [];
-        const permissionSets: CachedPermissionSet[] = permSetRecords.map(
-            (r: { Id: string; Name: string; Label?: string; NamespacePrefix?: string; IsOwnedByProfile?: boolean }) => ({
+            const queryOpts = { cwd: workspaceRoot, targetOrg };
+
+            const [profilesPayload, permSetsPayload, profilePermSetPayload] = await Promise.all([
+                runSfDataQuery<{ Id: string; Name: string }>('SELECT Id, Name FROM Profile', queryOpts),
+                runSfDataQuery<{ Id: string; Name: string; Label?: string; NamespacePrefix?: string; IsOwnedByProfile?: boolean }>(
+                    'SELECT Id, Name, Label, NamespacePrefix, IsOwnedByProfile FROM PermissionSet WHERE IsOwnedByProfile = false',
+                    queryOpts
+                ),
+                runSfDataQuery<{ Id: string; ProfileId: string; Name: string }>(
+                    'SELECT Id, ProfileId, Name FROM PermissionSet WHERE IsOwnedByProfile = true',
+                    queryOpts
+                )
+            ]);
+
+            const profileRecords = profilesPayload.result?.records ?? [];
+            const profiles: CachedProfile[] = profileRecords.map((r) => ({ id: r.Id, name: r.Name }));
+
+            const permSetRecords = permSetsPayload.result?.records ?? [];
+            const permissionSets: CachedPermissionSet[] = permSetRecords.map((r) => ({
                 id: r.Id,
                 name: r.Name,
                 label: r.Label,
                 namespacePrefix: r.NamespacePrefix,
                 isOwnedByProfile: r.IsOwnedByProfile
-            })
-        );
+            }));
 
-        const profilePermSetQuery = `sf data query --query "SELECT Id, ProfileId, Name FROM PermissionSet WHERE IsOwnedByProfile = true" --json`;
-        const profilePermSetOutput = await executeShellCommand(profilePermSetQuery, (out) => out);
-        const profilePermSetJson = JSON.parse(profilePermSetOutput) as {
-            status?: number;
-            result?: { records?: { Id: string; ProfileId: string; Name: string }[] };
-            message?: string;
-        };
-        const profilePermissionSetIds: Record<string, string> = {};
-        if (profilePermSetJson.status === 0 && profilePermSetJson.result?.records) {
-            for (const r of profilePermSetJson.result.records) {
+            const profilePermissionSetIds: Record<string, string> = {};
+            const profilePermSetRecords = profilePermSetPayload.result?.records ?? [];
+            for (const r of profilePermSetRecords) {
                 profilePermissionSetIds[r.ProfileId] = r.Id;
             }
-        }
 
-        await context.globalState.update(GLOBAL_STATE_KEY_PROFILES, profiles);
-        await context.globalState.update(GLOBAL_STATE_KEY_PERMISSION_SETS, permissionSets);
-        await context.globalState.update(GLOBAL_STATE_KEY_PROFILE_PERM_SET_IDS, profilePermissionSetIds);
+            await context.globalState.update(GLOBAL_STATE_KEY_PROFILES, profiles);
+            await context.globalState.update(GLOBAL_STATE_KEY_PERMISSION_SETS, permissionSets);
+            await context.globalState.update(GLOBAL_STATE_KEY_PROFILE_PERM_SET_IDS, profilePermissionSetIds);
 
-        if (showMessage) {
-            vscode.window.showInformationMessage(
-                `Loaded ${profiles.length} profiles and ${permissionSets.length} permission sets.`
-            );
-        }
+            if (showMessage) {
+                vscode.window.showInformationMessage(
+                    `Loaded ${profiles.length} profiles and ${permissionSets.length} permission sets.`
+                );
+            }
 
-        return { profiles, permissionSets, profilePermissionSetIds };
-    } catch (err) {
-        if (showMessage) {
-            vscode.window.showErrorMessage(`Refresh permission metadata failed: ${(err as Error).message}`);
+            return { profiles, permissionSets, profilePermissionSetIds };
+        } catch (err) {
+            if (showMessage) {
+                vscode.window.showErrorMessage(`Refresh permission metadata failed: ${(err as Error).message}`);
+            }
+            return undefined;
         }
-        return undefined;
+    };
+
+    if (showMessage) {
+        return vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Permission metadata',
+                cancellable: false
+            },
+            (progress) => doRefresh(progress)
+        );
     }
+
+    return doRefresh();
 }

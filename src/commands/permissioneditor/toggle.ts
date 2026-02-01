@@ -7,6 +7,7 @@ import { checkIfWorkspaceIsValidSfdxProject, executeShellCommand } from '../shar
 import {
     getCachedProfiles,
     getCachedPermissionSets,
+    getDefaultOrgContext,
     getProfilePermissionSetIds,
     refreshPermissionMetadata
 } from './refresh';
@@ -112,11 +113,23 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
 
     const parentIds = selectedTargets.map((t) => t.permissionSetId);
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders?.length) {return;}
+    if (!workspaceFolders?.length) {
+        return;
+    }
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
+    let sfContext: { cwd: string; targetOrg: string };
+    try {
+        sfContext = await getDefaultOrgContext(workspaceRoot);
+    } catch (err) {
+        vscode.window.showErrorMessage(
+            `Could not resolve default org: ${(err as Error).message}`
+        );
+        return;
+    }
+
     if (focused.kind === 'object') {
-        const existingRecords = await queryObjectPermissions(parentIds, focused.objectApiName);
+        const existingRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
         const defaultFlags: ObjectPermissionFlags = {
             allowCreate: false,
             allowDelete: false,
@@ -170,8 +183,13 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
     }
 
     if (focused.kind === 'field') {
-        const existingObjectRecords = await queryObjectPermissions(parentIds, focused.objectApiName);
-        const existingFieldRecords = await queryFieldPermissions(parentIds, focused.objectApiName, focused.fieldFullName);
+        const existingObjectRecords = await queryObjectPermissions(parentIds, focused.objectApiName, sfContext);
+        const existingFieldRecords = await queryFieldPermissions(
+            parentIds,
+            focused.objectApiName,
+            focused.fieldFullName,
+            sfContext
+        );
         const objectFlags: ObjectPermissionFlags = existingObjectRecords.length > 0
             ? objectPermissionsRecordToFlags(existingObjectRecords[0])
             : { allowCreate: false, allowDelete: false, allowEdit: false, allowRead: true, viewAllRecords: false, modifyAllRecords: false };
