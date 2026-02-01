@@ -17,8 +17,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const deleteCmd = `${labels.misc.EXTENSION_NAME}.${DELETE_PERMISSION_SET_COMMAND}`;
 
     if (!commands.includes(assignCmd)) {
-        const loadLabelsCommand = vscode.commands.registerCommand(assignCmd, loadPermissionSets);
-        context.subscriptions.push(loadLabelsCommand);
+        const assignPermissionSetsCommand = vscode.commands.registerCommand(assignCmd, managePermissionSets);
+        context.subscriptions.push(assignPermissionSetsCommand);
     }
     if (!commands.includes(createCmd)) {
         const createPermissionSetCommand = vscode.commands.registerCommand(createCmd, createPermissionSet);
