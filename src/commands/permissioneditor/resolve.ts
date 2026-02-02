@@ -14,15 +14,43 @@ export interface ResolvedTarget {
     filePath: string;
 }
 
+const PERMISSION_SET_SUFFIX = /\.(permissionSet|permissionset)-meta\.xml$/i;
+
+/**
+ * List permission set API names and their file paths by scanning the workspace.
+ * Matches both .permissionSet-meta.xml and .permissionset-meta.xml (Salesforce uses lowercase on disk).
+ */
+export function listPermissionSetsInWorkspace(workspaceRoot: string): { name: string; filePath: string }[] {
+    const camel = glob.sync('**/*.permissionSet-meta.xml', { cwd: workspaceRoot, absolute: true });
+    const lower = glob.sync('**/*.permissionset-meta.xml', { cwd: workspaceRoot, absolute: true });
+    const seen = new Set<string>();
+    const result: { name: string; filePath: string }[] = [];
+    for (const filePath of [...camel, ...lower]) {
+        const base = path.basename(filePath);
+        const name = base.replace(PERMISSION_SET_SUFFIX, '');
+        const key = name.toLowerCase();
+        if (seen.has(key)) { continue; }
+        seen.add(key);
+        result.push({ name, filePath });
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /**
  * Find metadata file in workspace: permissionSets/<Name>.permissionSet-meta.xml or profiles/<Name>.profile-meta.xml.
+ * For permission sets, matches both .permissionSet-meta.xml and .permissionset-meta.xml (Salesforce uses lowercase on disk).
  */
 function findInWorkspace(workspaceRoot: string, kind: TargetKind, name: string): string | null {
-    const pattern = kind === 'profile'
-        ? `**/profiles/${name}.profile-meta.xml`
-        : `**/permissionSets/${name}.permissionSet-meta.xml`;
-    const files = glob.sync(pattern, { cwd: workspaceRoot, absolute: true });
-    return files.length > 0 ? files[0] : null;
+    if (kind === 'profile') {
+        const files = glob.sync(`**/profiles/${name}.profile-meta.xml`, { cwd: workspaceRoot, absolute: true });
+        return files.length > 0 ? files[0] : null;
+    }
+    const camel = glob.sync(`**/permissionSets/${name}.permissionSet-meta.xml`, { cwd: workspaceRoot, absolute: true });
+    if (camel.length > 0) { return camel[0]; }
+    const lower = glob.sync(`**/permissionSets/${name}.permissionset-meta.xml`, { cwd: workspaceRoot, absolute: true });
+    if (lower.length > 0) { return lower[0]; }
+    const lowerDir = glob.sync(`**/permissionsets/${name}.permissionset-meta.xml`, { cwd: workspaceRoot, absolute: true });
+    return lowerDir.length > 0 ? lowerDir[0] : null;
 }
 
 /**

@@ -15,7 +15,7 @@ import { parseObjectFieldFromPath, isObjectOrFieldPermissionFile } from './path'
 import { queryObjectPermissions, queryFieldPermissions } from './soql';
 import { objectPermissionsRecordToFlags, fieldPermissionsRecordToFlags } from './soqlMappers';
 import { applyObjectPermissionsToFile, applyFieldPermissionsToFile } from './xmlEdit';
-import { resolveMetadataFile } from './resolve';
+import { resolveMetadataFile, listPermissionSetsInWorkspace } from './resolve';
 import { normalizeObjectPermissionFlags, normalizeFieldPermissionFlags } from './permissionFlags';
 import type { ObjectPermissionFlags, FieldPermissionFlags } from '../shared/types';
 
@@ -63,26 +63,42 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
         return;
     }
 
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders?.length) {
+        return;
+    }
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+    const workspacePermissionSets = listPermissionSetsInWorkspace(workspaceRoot);
     let profiles = getCachedProfiles(context);
     let permissionSets = getCachedPermissionSets(context);
     const profilePermissionSetIds = getProfilePermissionSetIds(context);
 
-    if (profiles.length === 0 && permissionSets.length === 0) {
+    const hasProfileTargets = profiles.some((p) => profilePermissionSetIds[p.id]);
+    const hasPermissionSetTargets = permissionSets.length > 0 || workspacePermissionSets.length > 0;
+    if (!hasProfileTargets && !hasPermissionSetTargets) {
         const refreshFirst = await vscode.window.showQuickPick(
             [{ label: 'Refresh permission metadata first', value: 'refresh' }],
-            { placeHolder: 'No profiles or permission sets cached. Run refresh first?' }
+            { placeHolder: 'No profiles or permission sets. Run refresh or add a permission set to the repo?' }
         );
         if (refreshFirst?.value === 'refresh') {
             await refreshPermissionMetadata(context, true);
             profiles = getCachedProfiles(context);
             permissionSets = getCachedPermissionSets(context);
         }
-        if (profiles.length === 0 && permissionSets.length === 0) {
-            vscode.window.showErrorMessage('No profiles or permission sets available. Run "Refresh permission metadata" first.');
+        const hasTargetsAfterRefresh =
+            profiles.some((p) => profilePermissionSetIds[p.id]) ||
+            permissionSets.length > 0 ||
+            workspacePermissionSets.length > 0;
+        if (!hasTargetsAfterRefresh) {
+            vscode.window.showErrorMessage(
+                'No profiles or permission sets available. Run "Refresh permission metadata" or add a permission set file to the workspace.'
+            );
             return;
         }
     }
 
+    const cachedPermSetNames = new Set(permissionSets.map((ps) => ps.name));
     const targetItems: TargetItem[] = [];
     for (const p of profiles) {
         const permSetId = profilePermissionSetIds[p.id];
@@ -104,6 +120,16 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
             permissionSetId: ps.id
         });
     }
+    for (const { name } of workspacePermissionSets) {
+        if (cachedPermSetNames.has(name)) { continue; }
+        targetItems.push({
+            label: `Permission Set: ${name} (workspace)`,
+            targetKind: 'permissionSet',
+            id: `workspace:${name}`,
+            name,
+            permissionSetId: ''
+        });
+    }
 
     const selectedTargets = await vscode.window.showQuickPick<TargetItem>(targetItems, {
         placeHolder: 'Select one or more profiles or permission sets',
@@ -112,12 +138,9 @@ export async function runToggleObjectFieldPermissions(context: vscode.ExtensionC
     });
     if (!selectedTargets?.length) {return;}
 
-    const parentIds = selectedTargets.map((t) => t.permissionSetId);
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders?.length) {
-        return;
-    }
-    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const parentIds = selectedTargets
+        .map((t) => t.permissionSetId)
+        .filter((id): id is string => Boolean(id && /^[a-zA-Z0-9]{15,18}$/.test(id)));
 
     await vscode.window.withProgress(
         {
